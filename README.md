@@ -132,5 +132,150 @@ Finally, to ensure the environment is fully prepared for building the temporary 
 source ~/.bash_profile
 ```
 
+## Before Compilation Instructions
+
+Check $LFS is /mnt/lfs
+```
+echo $LFS
+```
+
+The build instructions assume that the Host System Requirements, including symbolic links, have been set properly:
+- bash is the shell in use.
+- sh is a symbolic link to bash.
+- /usr/bin/awk is a symbolic link to gawk.
+- /usr/bin/yacc is a symbolic link to bison, or to a small script that executes bison.
 
 
+
+1. Place all the sources and patches in a directory that will be accessible from the chroot environment, such as /mnt/lfs/sources/.
+
+2. Change to the /mnt/lfs/sources/ directory.
+
+3. For each package:
+
+    - Using the **tar** program, extract the package to be built. In Chapter 5 and Chapter 6, ensure you are the lfs user when extracting the package.
+
+    - Do not use any method except the tar command to extract the source code. Notably, using the **cp -R** command to copy the source code tree somewhere else can destroy timestamps in the source tree, and cause the build to fail.
+
+    - Change to the directory created when the package was extracted.
+
+    - Follow the instructions for building the package.
+
+    - Change back to the sources directory when the build is complete.
+
+    - Delete the extracted source directory unless instructed otherwise.
+
+
+## Installation of Cross Binutils
+change to sources and extract binutils-2.43.1.tar.xz
+```
+cd /mnt/lfs/sources
+tar -xvf binutils-2.43.1.tar.xz
+```
+
+change to binutils-2.43.1, make build dir and change to build
+```
+cd binutils-2.43.1
+mkdir -v build
+cd       build
+```
+
+prepare compilation
+```
+time { ../configure --prefix=$LFS/tools \
+             --with-sysroot=$LFS \
+             --target=$LFS_TGT   \
+             --disable-nls       \
+             --enable-gprofng=no \
+             --disable-werror    \
+             --enable-new-dtags  \
+             --enable-default-hash-style=gnu && make && make install; }
+```
+
+## Installation of Cross GCC
+change to sources and extract
+```
+cd /mnt/lfs/sources
+tar -xvf gcc-14.2.0.tar.xz
+```
+
+change to gcc-14.2.0, and extract others and 
+```
+cd gcc-14.2.0
+tar -xf ../mpfr-4.2.1.tar.xz
+mv -v mpfr-4.2.1 mpfr
+tar -xf ../gmp-6.3.0.tar.xz
+mv -v gmp-6.3.0 gmp
+tar -xf ../mpc-1.3.1.tar.gz
+mv -v mpc-1.3.1 mpc
+```
+
+On x86_64 hosts, set the default directory name for 64-bit libraries to “lib”:
+```
+case $(uname -m) in
+  x86_64)
+    sed -e '/m64=/s/lib64/lib/' \
+        -i.orig gcc/config/i386/t-linux64
+ ;;
+esac
+```
+
+make build dir and change to build
+```
+mkdir -v build
+cd       build
+```
+
+prepare compilation
+```
+time { ../configure                  \
+    --target=$LFS_TGT         \
+    --prefix=$LFS/tools       \
+    --with-glibc-version=2.40 \
+    --with-sysroot=$LFS       \
+    --with-newlib             \
+    --without-headers         \
+    --enable-default-pie      \
+    --enable-default-ssp      \
+    --disable-nls             \
+    --disable-shared          \
+    --disable-multilib        \
+    --disable-threads         \
+    --disable-libatomic       \
+    --disable-libgomp         \
+    --disable-libquadmath     \
+    --disable-libssp          \
+    --disable-libvtv          \
+    --disable-libstdcxx       \
+    --enable-languages=c,c++ && make && make install; }
+```
+
+This build of GCC has installed a couple of internal system headers. Normally one of them, limits.h, would in turn include the corresponding system limits.h header, in this case, $LFS/usr/include/limits.h. However, at the time of this build of GCC $LFS/usr/include/limits.h does not exist, so the internal header that has just been installed is a partial, self-contained file and does not include the extended features of the system header. This is adequate for building Glibc, but the full internal header will be needed later. Create a full version of the internal header using a command that is identical to what the GCC build system does in normal circumstances:
+
+```
+cd ..
+cat gcc/limitx.h gcc/glimits.h gcc/limity.h > \
+  `dirname $($LFS_TGT-gcc -print-libgcc-file-name)`/include/limits.h
+```
+
+## Linux-6.10.5 API Headers
+change to sources and extract
+```
+cd /mnt/lfs/sources
+tar -xvf linux-6.10.5.tar.xz
+```
+
+change to linux-6.10.5, and 
+```
+cd linux-6.10.5
+
+# Make sure there are no stale files embedded in the package
+
+make mrproper
+
+# Now extract the user-visible kernel headers from the source. The recommended make target “headers_install” cannot be used, because it requires rsync, which may not be available. The headers are first placed in ./usr, then copied to the needed location.
+
+make headers
+find usr/include -type f ! -name '*.h' -delete
+cp -rv usr/include $LFS/usr
+```
