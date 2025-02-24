@@ -7,7 +7,7 @@ version_check.sh to check requirement
 bash version_check.sh
 ```
 If sh is not link to bash:
-```
+```bash
 sudo ln -s /bin/bash /bin/sh
 
 # check it
@@ -16,13 +16,80 @@ ls -l /bin/sh
 
 ## **Creating a New Partition**
 
+1. Create EFI system partition
 ```bash
-mkfs -v -t ext4 /dev/<xxx>
+fdisk /dev/sda
+
+d # If you want delete partition
+
+# Use GPT disk label
+g
+
+# Add EFI system partition
+n
+1
+enter
++500M
+
+# Add boot system 
+n
+2
+enter
++250M
+
+# Add swap
+n
+3
+enter
++2G
+t
+19
+
+# final
+n
+4
+enter
+```
+after fdisk, the disk structure:
+```bash
+Disk /dev/sda: 931.51 GiB, 1000204886016 bytes, 1953525168 sectors
+Disk model: XS1000          
+Units: sectors of 1 * 512 = 512 bytes
+Sector size (logical/physical): 512 bytes / 512 bytes
+I/O size (minimum/optimal): 512 bytes / 512 bytes
+Disklabel type: gpt
+Disk identifier: DD7174AA-481F-4A11-ABD5-EF786FC13F48
+
+Device       Start       End   Sectors  Size Type
+/dev/sda1     2048   1026047   1024000  500M EFI System
+/dev/sda2  1026048   1538047    512000  250M Linux filesystem # boot partition
+/dev/sda3  1538048   5732351   4194304    2G Linux swap
+/dev/sda4  5732352 634877951 629145600  300G Linux filesystem
+```
+
+Format EFI partition fat32
+```bash
+mkfs.fat -F32 /dev/sda1
+```
+
+Format boot partition ext4
+```bash
+mkfs -v -t ext4 /dev/sda2
+```
+
+Format swap
+```bash
+mkswap /dev/sda3
+```
+
+Format root(/) partition
+```bash
+mkfs -v -t ext4 /dev/sda4
 ```
 
 if mkfs fail, maybe the /dev/<xxx> is mounted, you should use command:
-```bash
-sudo umount -l /dev/sda1
+``` bash
+sudo umount -l /dev/xxx
 ```
 -l can force umount it even some process using the drive
 
@@ -35,16 +102,21 @@ source /etc/environment
 ```
 
 ## **Mounting the New Partition**
-
-Create $LFS dir and mount
+Create $LFS dir and mount to root(/) partition
 
 ```bash
 mkdir -pv $LFS
-mount -v -t ext4 /dev/<xxx> $LFS
+mount -v -t ext4 /dev/sda4 $LFS
+df -h # check for it
 ```
 
-Create sources in $LFS to obtain all the necessary packages and patches to build LFS
+If you have swap, use swapon command:
+```bash
+/sbin/swapon -v /dev/sda3
+```
 
+## Download packages and patches
+Create sources in $LFS to obtain all the necessary packages and patches to build LFS
 ```bash
 mkdir -v $LFS/sources
 chmod -v a+wt $LFS/sources
@@ -61,6 +133,7 @@ download source file to $LFS/sources
 ```bash
 wget --input-file=wget-list-sysv --continue --directory-prefix=$LFS/sources
 ```
+- note: expat-2.6.2.tar.xz source is not working now, find from internet
 
 ## **Creating a Limited Directory Layout in the LFS Filesystem**
 
@@ -1374,3 +1447,39 @@ In this section, the test suite for GCC is considered important, but it takes a 
 ```
 su tester -c "PATH=$PATH make -k -j12 check"
 ```
+
+## Ncurses-6.5
+https://www.linuxfromscratch.org/lfs/view/stable/chapter08/ncurses.html
+- note: the Note section in page I am not used
+
+## Sed-4.9
+https://www.linuxfromscratch.org/lfs/view/stable/chapter08/sed.html
+
+## Psmisc-23.7
+https://www.linuxfromscratch.org/lfs/view/stable/chapter08/psmisc.html
+
+## Gettext-0.22.5
+https://www.linuxfromscratch.org/lfs/view/stable/chapter08/gettext.html
+
+## Bison-3.8.2
+https://www.linuxfromscratch.org/lfs/view/stable/chapter08/bison.html
+
+## Grep-3.11
+https://www.linuxfromscratch.org/lfs/view/stable/chapter08/grep.html
+
+## Bash-5.2.32
+https://www.linuxfromscratch.org/lfs/view/stable/chapter08/bash.html
+
+## Libtool-2.4.7
+https://www.linuxfromscratch.org/lfs/view/stable/chapter08/libtool.html
+
+## From GDBM to Setuptools follow command in website
+
+## Ninja-1.12.1
+
+- I don't choose use 
+```
+export NINJAJOBS=4
+```
+cause memory or cpu is enough
+
